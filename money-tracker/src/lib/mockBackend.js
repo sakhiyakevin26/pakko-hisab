@@ -12,121 +12,321 @@ const getHeaders = (extraHeaders = {}) => {
   return headers;
 };
 
-const handleResponse = async (res, defaultErrorMessage = 'Request failed') => {
-  const contentType = res.headers.get('content-type');
-  if (contentType && contentType.includes('application/json')) {
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.error || data.message || defaultErrorMessage);
-    }
-    return data;
-  } else {
-    if (!res.ok) {
-      throw new Error(`API connection failed (Status ${res.status}). Please check if the backend API server is online.`);
-    }
-    throw new Error('Server returned invalid data format.');
-  }
+// --- Local Storage Database Fallback ---
+const DEFAULT_USERS = [
+  { id: 'admin-1', username: 'sakhiyarajnikbhai@gmail.com', password: 'kevin@1234', role: 'admin', sharedWith: [] },
+  { id: 'admin-2', username: 'kevin', password: 'kevin1234', role: 'admin', sharedWith: [] },
+  { id: 'user-1', username: 'user1', password: 'pass1', role: 'user', sharedWith: [] },
+  { id: 'user-2', username: 'user2', password: 'pass2', role: 'user', sharedWith: [] },
+  { id: 'user-3', username: 'user3', password: 'pass3', role: 'user', sharedWith: [] },
+  { id: 'user-4', username: 'user4', password: 'pass4', role: 'user', sharedWith: [] }
+];
+
+const getLocalUsers = () => {
+  const stored = localStorage.getItem('money_tracker_users');
+  return stored ? JSON.parse(stored) : DEFAULT_USERS;
 };
+
+const saveLocalUsers = (users) => {
+  localStorage.setItem('money_tracker_users', JSON.stringify(users));
+};
+
+const getLocalTransactions = () => {
+  const stored = localStorage.getItem('money_tracker_transactions');
+  return stored ? JSON.parse(stored) : [];
+};
+
+const saveLocalTransactions = (txs) => {
+  localStorage.setItem('money_tracker_transactions', JSON.stringify(txs));
+};
+
+const parseGoogleToken = (credential) => {
+  try {
+    const parts = credential.split('.');
+    if (parts.length === 3) {
+      const base64Url = parts[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(
+        window.atob(base64)
+          .split('')
+          .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+      return JSON.parse(jsonPayload);
+    }
+  } catch (e) {
+    console.error('Failed to parse JWT token', e);
+  }
+  return null;
+};
+
+import { v4 as uuidv4 } from 'uuid';
 
 export const mockBackend = {
   login: async (username, password) => {
-    const res = await fetch(`${API_URL}/api/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
-    });
-    return handleResponse(res, 'Login failed');
+    try {
+      const res = await fetch(`${API_URL}/api/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (e) {
+      console.warn('Backend server connection failed. Falling back to local storage.');
+    }
+    
+    // Fallback logic
+    const users = getLocalUsers();
+    const user = users.find(u => u.username.toLowerCase() === username.toLowerCase() && u.password === password);
+    if (user) {
+      const safeUser = { id: user.id, username: user.username, role: user.role };
+      return { success: true, user: safeUser, token: 'mock-jwt-token' };
+    }
+    throw new Error('Invalid credentials');
   },
 
   register: async (username, password) => {
-    const res = await fetch(`${API_URL}/api/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
-    });
-    return handleResponse(res, 'Registration failed');
+    try {
+      const res = await fetch(`${API_URL}/api/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (e) {
+      console.warn('Backend server connection failed. Falling back to local storage.');
+    }
+
+    // Fallback logic
+    const users = getLocalUsers();
+    const existingUser = users.find(u => u.username.toLowerCase() === username.toLowerCase());
+    if (existingUser) {
+      throw new Error('Username already exists');
+    }
+    
+    const newId = 'user-' + uuidv4();
+    const newUser = { id: newId, username, password, role: 'user', sharedWith: [] };
+    users.push(newUser);
+    saveLocalUsers(users);
+
+    const safeUser = { id: newUser.id, username: newUser.username, role: newUser.role };
+    return { success: true, user: safeUser, token: 'mock-jwt-token' };
   },
 
   loginWithGoogle: async (credential) => {
-    const res = await fetch(`${API_URL}/api/auth/google`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ credential })
-    });
-    return handleResponse(res, 'Google login failed');
+    try {
+      const res = await fetch(`${API_URL}/api/auth/google`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential })
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (e) {
+      console.warn('Backend server connection failed. Falling back to local storage.');
+    }
+
+    // Fallback logic
+    const payload = parseGoogleToken(credential);
+    if (!payload) {
+      throw new Error('Invalid Google credential token');
+    }
+
+    const sub = payload.sub || uuidv4();
+    const email = payload.email || `google-user-${sub.slice(0, 8)}@gmail.com`;
+
+    const users = getLocalUsers();
+    let user = users.find(u => u.username.toLowerCase() === email.toLowerCase());
+    if (!user) {
+      user = {
+        id: 'google-' + sub,
+        username: email,
+        password: 'google-oauth-managed',
+        role: 'user',
+        sharedWith: []
+      };
+      users.push(user);
+      saveLocalUsers(users);
+    }
+
+    const safeUser = { id: user.id, username: user.username, role: user.role };
+    return { success: true, user: safeUser, token: 'mock-jwt-token' };
   },
 
   getUsers: async () => {
-    const res = await fetch(`${API_URL}/api/users`, {
-      headers: getHeaders()
-    });
-    return handleResponse(res, 'Failed to fetch users');
+    try {
+      const res = await fetch(`${API_URL}/api/users`, {
+        headers: getHeaders()
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (e) {
+      console.warn('Backend server connection failed. Falling back to local storage.');
+    }
+
+    // Fallback logic
+    const users = getLocalUsers();
+    const sessionUser = JSON.parse(localStorage.getItem('money_tracker_session') || 'null');
+    const currentUserId = sessionUser ? sessionUser.id : null;
+    return users
+      .filter(u => u.id !== currentUserId)
+      .map(u => ({ id: u.id, username: u.username, role: u.role }));
   },
 
   getTransactions: async (userId = null) => {
-    const url = userId ? `${API_URL}/api/transactions?userId=${userId}` : `${API_URL}/api/transactions`;
-    const res = await fetch(url, {
-      headers: getHeaders()
-    });
-    return handleResponse(res, 'Failed to fetch transactions');
+    try {
+      const res = await fetch(
+        userId ? `${API_URL}/api/transactions?userId=${userId}` : `${API_URL}/api/transactions`,
+        { headers: getHeaders() }
+      );
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (e) {
+      console.warn('Backend server connection failed. Falling back to local storage.');
+    }
+
+    // Fallback logic
+    const sessionUser = JSON.parse(localStorage.getItem('money_tracker_session') || 'null');
+    const currentUserId = sessionUser ? sessionUser.id : null;
+    const targetUserId = userId || currentUserId;
+    
+    const txs = getLocalTransactions();
+    return txs.filter(t => t.userId === targetUserId);
   },
 
   addTransaction: async (transactionData, userId = 'legacy') => {
-    const res = await fetch(`${API_URL}/api/transactions`, {
-      method: 'POST',
-      headers: getHeaders(),
-      body: JSON.stringify({ ...transactionData, userId })
-    });
-    return handleResponse(res, 'Failed to add transaction');
+    try {
+      const res = await fetch(`${API_URL}/api/transactions`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ ...transactionData, userId })
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (e) {
+      console.warn('Backend server connection failed. Falling back to local storage.');
+    }
+
+    // Fallback logic
+    const sessionUser = JSON.parse(localStorage.getItem('money_tracker_session') || 'null');
+    const currentUserId = sessionUser ? sessionUser.id : null;
+    const activeUserId = userId === 'legacy' ? currentUserId : userId;
+
+    const txs = getLocalTransactions();
+    const newTx = {
+      ...transactionData,
+      id: activeUserId + '_' + uuidv4(),
+      userId: activeUserId,
+      createdAt: new Date().toISOString()
+    };
+    txs.push(newTx);
+    saveLocalTransactions(txs);
+    return newTx;
   },
 
   deleteTransaction: async (id) => {
-    const res = await fetch(`${API_URL}/api/transactions/${id}`, {
-      method: 'DELETE',
-      headers: getHeaders()
-    });
-    return handleResponse(res, 'Failed to delete transaction');
+    try {
+      const res = await fetch(`${API_URL}/api/transactions/${id}`, {
+        method: 'DELETE',
+        headers: getHeaders()
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (e) {
+      console.warn('Backend server connection failed. Falling back to local storage.');
+    }
+
+    // Fallback logic
+    const txs = getLocalTransactions();
+    const updated = txs.filter(t => t.id !== id);
+    saveLocalTransactions(updated);
+    return { success: true };
   },
 
   updateTransaction: async (id, updatedData) => {
-    const res = await fetch(`${API_URL}/api/transactions/${id}`, {
-      method: 'PUT',
-      headers: getHeaders(),
-      body: JSON.stringify(updatedData)
-    });
-    return handleResponse(res, 'Failed to update transaction');
+    try {
+      const res = await fetch(`${API_URL}/api/transactions/${id}`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify(updatedData)
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (e) {
+      console.warn('Backend server connection failed. Falling back to local storage.');
+    }
+
+    // Fallback logic
+    const txs = getLocalTransactions();
+    const txIndex = txs.findIndex(t => t.id === id);
+    if (txIndex !== -1) {
+      txs[txIndex] = { ...txs[txIndex], ...updatedData };
+      saveLocalTransactions(txs);
+      return txs[txIndex];
+    }
+    throw new Error('Transaction not found');
   },
 
   // Collaborative Sharing Methods
   shareWorkspace: async (targetUser) => {
-    const res = await fetch(`${API_URL}/api/users/share`, {
-      method: 'POST',
-      headers: getHeaders(),
-      body: JSON.stringify({ targetUser })
-    });
-    return handleResponse(res, 'Failed to share workspace');
+    try {
+      const res = await fetch(`${API_URL}/api/users/share`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ targetUser })
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (e) {}
+    throw new Error('Workspace sharing requires an active backend server connection.');
   },
 
   unshareWorkspace: async (targetId) => {
-    const res = await fetch(`${API_URL}/api/users/unshare`, {
-      method: 'POST',
-      headers: getHeaders(),
-      body: JSON.stringify({ targetId })
-    });
-    return handleResponse(res, 'Failed to revoke workspace access');
+    try {
+      const res = await fetch(`${API_URL}/api/users/unshare`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ targetId })
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (e) {}
+    throw new Error('Workspace unsharing requires an active backend server connection.');
   },
 
   getSharingList: async () => {
-    const res = await fetch(`${API_URL}/api/users/sharing`, {
-      headers: getHeaders()
-    });
-    return handleResponse(res, 'Failed to fetch sharing list');
+    try {
+      const res = await fetch(`${API_URL}/api/users/sharing`, {
+        headers: getHeaders()
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (e) {}
+    return [];
   },
 
   getSharedWorkspaces: async () => {
-    const res = await fetch(`${API_URL}/api/users/shared-with-me`, {
-      headers: getHeaders()
-    });
-    return handleResponse(res, 'Failed to fetch shared workspaces');
+    try {
+      const res = await fetch(`${API_URL}/api/users/shared-with-me`, {
+        headers: getHeaders()
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (e) {}
+    return [];
   }
 };
