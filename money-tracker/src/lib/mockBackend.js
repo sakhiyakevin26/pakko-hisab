@@ -1,4 +1,17 @@
-const API_URL = import.meta.env.VITE_API_URL || '';
+const getApiUrl = () => {
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  if (typeof window !== 'undefined') {
+    const origin = window.location.origin;
+    if (origin.startsWith('capacitor://') || (origin.startsWith('http://localhost') && !window.location.port)) {
+      return 'http://10.0.2.2:3001';
+    }
+  }
+  return '';
+};
+
+const API_URL = getApiUrl();
 
 const getHeaders = (extraHeaders = {}) => {
   const sessionUser = JSON.parse(localStorage.getItem('money_tracker_session') || 'null');
@@ -320,8 +333,11 @@ export const mockBackend = {
       if (res.ok) {
         return await res.json();
       }
-    } catch (e) {}
-    throw new Error('Workspace sharing requires an active backend server connection.');
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || `Server status ${res.status}`);
+    } catch (e) {
+      throw new Error(`Workspace sharing requires an active backend server connection. (Endpoint: ${API_URL || '/api'}/api/users/share). Details: ${e.message}`);
+    }
   },
 
   unshareWorkspace: async (targetId) => {
@@ -334,8 +350,11 @@ export const mockBackend = {
       if (res.ok) {
         return await res.json();
       }
-    } catch (e) {}
-    throw new Error('Workspace unsharing requires an active backend server connection.');
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || `Server status ${res.status}`);
+    } catch (e) {
+      throw new Error(`Workspace unsharing requires an active backend server connection. (Endpoint: ${API_URL || '/api'}/api/users/unshare). Details: ${e.message}`);
+    }
   },
 
   getSharingList: async () => {
