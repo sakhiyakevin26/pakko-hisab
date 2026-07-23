@@ -13,6 +13,7 @@ export default function Layout() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [targetUser, setTargetUser] = useState('');
   const [sharingList, setSharingList] = useState([]);
+  const [availableUsers, setAvailableUsers] = useState([]);
   const [shareError, setShareError] = useState('');
   const [isShareLoading, setIsShareLoading] = useState(false);
 
@@ -29,8 +30,10 @@ export default function Layout() {
     try {
       const list = await mockBackend.getSharingList();
       setSharingList(list);
+      const users = await mockBackend.getUsers();
+      setAvailableUsers(users);
     } catch (err) {
-      console.error("Failed to load sharing list", err);
+      console.error("Failed to load sharing list or users", err);
     }
   };
 
@@ -152,8 +155,14 @@ export default function Layout() {
                   placeholder="e.g. user@example.com or google-1234" 
                   value={targetUser}
                   onChange={e => setTargetUser(e.target.value)}
+                  list="registeredUsers"
                   required
                 />
+                <datalist id="registeredUsers">
+                  {availableUsers.map(u => (
+                    <option key={u.id} value={u.username}>{u.username} (ID: {u.id})</option>
+                  ))}
+                </datalist>
                 <button type="submit" className="btn btn-primary" disabled={isShareLoading} style={{ padding: '0 1.25rem', whiteSpace: 'nowrap' }}>
                   {isShareLoading ? 'Adding...' : 'Share'}
                 </button>
