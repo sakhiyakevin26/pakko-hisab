@@ -62,7 +62,16 @@ const parseGoogleToken = (credential) => {
 
 import { v4 as uuidv4 } from 'uuid';
 
+let isBackendOffline = false;
+let lastCheckTime = 0;
+const OFFLINE_COOLDOWN = 10000; // 10 seconds (in milliseconds)
+
 const fetchWithTimeout = async (url, options = {}, timeout = 3000) => {
+  const now = Date.now();
+  if (isBackendOffline && (now - lastCheckTime < OFFLINE_COOLDOWN)) {
+    throw new Error('Backend server is offline (cached connection failure)');
+  }
+
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
   try {
@@ -71,9 +80,16 @@ const fetchWithTimeout = async (url, options = {}, timeout = 3000) => {
       signal: controller.signal
     });
     clearTimeout(id);
+    
+    // Successfully contacted server, so mark backend as online
+    isBackendOffline = false;
+    
     return response;
   } catch (error) {
     clearTimeout(id);
+    // Connection failed or timed out: mark backend as offline
+    isBackendOffline = true;
+    lastCheckTime = Date.now();
     throw error;
   }
 };
