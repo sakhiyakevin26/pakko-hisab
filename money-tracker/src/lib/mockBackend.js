@@ -62,10 +62,26 @@ const parseGoogleToken = (credential) => {
 
 import { v4 as uuidv4 } from 'uuid';
 
+const fetchWithTimeout = async (url, options = {}, timeout = 3000) => {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    clearTimeout(id);
+    return response;
+  } catch (error) {
+    clearTimeout(id);
+    throw error;
+  }
+};
+
 export const mockBackend = {
   login: async (username, password) => {
     try {
-      const res = await fetch(`${API_URL}/api/login`, {
+      const res = await fetchWithTimeout(`${API_URL}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
@@ -74,7 +90,7 @@ export const mockBackend = {
         return await res.json();
       }
     } catch (e) {
-      console.warn('Backend server connection failed. Falling back to local storage.');
+      console.warn('Backend server connection failed. Falling back to local storage.', e.message);
     }
     
     // Fallback logic
@@ -89,7 +105,7 @@ export const mockBackend = {
 
   register: async (username, password) => {
     try {
-      const res = await fetch(`${API_URL}/api/register`, {
+      const res = await fetchWithTimeout(`${API_URL}/api/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
@@ -98,7 +114,7 @@ export const mockBackend = {
         return await res.json();
       }
     } catch (e) {
-      console.warn('Backend server connection failed. Falling back to local storage.');
+      console.warn('Backend server connection failed. Falling back to local storage.', e.message);
     }
 
     // Fallback logic
@@ -119,7 +135,7 @@ export const mockBackend = {
 
   loginWithGoogle: async (credential) => {
     try {
-      const res = await fetch(`${API_URL}/api/auth/google`, {
+      const res = await fetchWithTimeout(`${API_URL}/api/auth/google`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ credential })
@@ -128,7 +144,7 @@ export const mockBackend = {
         return await res.json();
       }
     } catch (e) {
-      console.warn('Backend server connection failed. Falling back to local storage.');
+      console.warn('Backend server connection failed. Falling back to local storage.', e.message);
     }
 
     // Fallback logic
@@ -160,14 +176,14 @@ export const mockBackend = {
 
   getUsers: async () => {
     try {
-      const res = await fetch(`${API_URL}/api/users`, {
+      const res = await fetchWithTimeout(`${API_URL}/api/users`, {
         headers: getHeaders()
       });
       if (res.ok) {
         return await res.json();
       }
     } catch (e) {
-      console.warn('Backend server connection failed. Falling back to local storage.');
+      console.warn('Backend server connection failed. Falling back to local storage.', e.message);
     }
 
     // Fallback logic
@@ -181,7 +197,7 @@ export const mockBackend = {
 
   getTransactions: async (userId = null) => {
     try {
-      const res = await fetch(
+      const res = await fetchWithTimeout(
         userId ? `${API_URL}/api/transactions?userId=${userId}` : `${API_URL}/api/transactions`,
         { headers: getHeaders() }
       );
@@ -189,7 +205,7 @@ export const mockBackend = {
         return await res.json();
       }
     } catch (e) {
-      console.warn('Backend server connection failed. Falling back to local storage.');
+      console.warn('Backend server connection failed. Falling back to local storage.', e.message);
     }
 
     // Fallback logic
@@ -203,7 +219,7 @@ export const mockBackend = {
 
   addTransaction: async (transactionData, userId = 'legacy') => {
     try {
-      const res = await fetch(`${API_URL}/api/transactions`, {
+      const res = await fetchWithTimeout(`${API_URL}/api/transactions`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({ ...transactionData, userId })
@@ -212,7 +228,7 @@ export const mockBackend = {
         return await res.json();
       }
     } catch (e) {
-      console.warn('Backend server connection failed. Falling back to local storage.');
+      console.warn('Backend server connection failed. Falling back to local storage.', e.message);
     }
 
     // Fallback logic
@@ -234,7 +250,7 @@ export const mockBackend = {
 
   deleteTransaction: async (id) => {
     try {
-      const res = await fetch(`${API_URL}/api/transactions/${id}`, {
+      const res = await fetchWithTimeout(`${API_URL}/api/transactions/${id}`, {
         method: 'DELETE',
         headers: getHeaders()
       });
@@ -242,7 +258,7 @@ export const mockBackend = {
         return await res.json();
       }
     } catch (e) {
-      console.warn('Backend server connection failed. Falling back to local storage.');
+      console.warn('Backend server connection failed. Falling back to local storage.', e.message);
     }
 
     // Fallback logic
@@ -254,7 +270,7 @@ export const mockBackend = {
 
   updateTransaction: async (id, updatedData) => {
     try {
-      const res = await fetch(`${API_URL}/api/transactions/${id}`, {
+      const res = await fetchWithTimeout(`${API_URL}/api/transactions/${id}`, {
         method: 'PUT',
         headers: getHeaders(),
         body: JSON.stringify(updatedData)
@@ -263,7 +279,7 @@ export const mockBackend = {
         return await res.json();
       }
     } catch (e) {
-      console.warn('Backend server connection failed. Falling back to local storage.');
+      console.warn('Backend server connection failed. Falling back to local storage.', e.message);
     }
 
     // Fallback logic
@@ -280,11 +296,11 @@ export const mockBackend = {
   // Collaborative Sharing Methods
   shareWorkspace: async (targetUser) => {
     try {
-      const res = await fetch(`${API_URL}/api/users/share`, {
+      const res = await fetchWithTimeout(`${API_URL}/api/users/share`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({ targetUser })
-      });
+      }, 4000);
       if (res.ok) {
         return await res.json();
       }
@@ -294,11 +310,11 @@ export const mockBackend = {
 
   unshareWorkspace: async (targetId) => {
     try {
-      const res = await fetch(`${API_URL}/api/users/unshare`, {
+      const res = await fetchWithTimeout(`${API_URL}/api/users/unshare`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({ targetId })
-      });
+      }, 4000);
       if (res.ok) {
         return await res.json();
       }
@@ -308,7 +324,7 @@ export const mockBackend = {
 
   getSharingList: async () => {
     try {
-      const res = await fetch(`${API_URL}/api/users/sharing`, {
+      const res = await fetchWithTimeout(`${API_URL}/api/users/sharing`, {
         headers: getHeaders()
       });
       if (res.ok) {
@@ -320,7 +336,7 @@ export const mockBackend = {
 
   getSharedWorkspaces: async () => {
     try {
-      const res = await fetch(`${API_URL}/api/users/shared-with-me`, {
+      const res = await fetchWithTimeout(`${API_URL}/api/users/shared-with-me`, {
         headers: getHeaders()
       });
       if (res.ok) {
