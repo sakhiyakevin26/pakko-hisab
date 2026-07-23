@@ -12,6 +12,22 @@ const getHeaders = (extraHeaders = {}) => {
   return headers;
 };
 
+const handleResponse = async (res, defaultErrorMessage = 'Request failed') => {
+  const contentType = res.headers.get('content-type');
+  if (contentType && contentType.includes('application/json')) {
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || data.message || defaultErrorMessage);
+    }
+    return data;
+  } else {
+    if (!res.ok) {
+      throw new Error(`API connection failed (Status ${res.status}). Please check if the backend API server is online.`);
+    }
+    throw new Error('Server returned invalid data format.');
+  }
+};
+
 export const mockBackend = {
   login: async (username, password) => {
     const res = await fetch(`${API_URL}/api/login`, {
@@ -19,11 +35,7 @@ export const mockBackend = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password })
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Login failed');
-    }
-    return await res.json();
+    return handleResponse(res, 'Login failed');
   },
 
   register: async (username, password) => {
@@ -32,11 +44,7 @@ export const mockBackend = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password })
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Registration failed');
-    }
-    return await res.json();
+    return handleResponse(res, 'Registration failed');
   },
 
   loginWithGoogle: async (credential) => {
@@ -45,22 +53,14 @@ export const mockBackend = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ credential })
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Google login failed');
-    }
-    return await res.json();
+    return handleResponse(res, 'Google login failed');
   },
 
   getUsers: async () => {
     const res = await fetch(`${API_URL}/api/users`, {
       headers: getHeaders()
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Failed to fetch users');
-    }
-    return await res.json();
+    return handleResponse(res, 'Failed to fetch users');
   },
 
   getTransactions: async (userId = null) => {
@@ -68,11 +68,7 @@ export const mockBackend = {
     const res = await fetch(url, {
       headers: getHeaders()
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Failed to fetch transactions');
-    }
-    return await res.json();
+    return handleResponse(res, 'Failed to fetch transactions');
   },
 
   addTransaction: async (transactionData, userId = 'legacy') => {
@@ -81,11 +77,7 @@ export const mockBackend = {
       headers: getHeaders(),
       body: JSON.stringify({ ...transactionData, userId })
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Failed to add transaction');
-    }
-    return await res.json();
+    return handleResponse(res, 'Failed to add transaction');
   },
 
   deleteTransaction: async (id) => {
@@ -93,11 +85,7 @@ export const mockBackend = {
       method: 'DELETE',
       headers: getHeaders()
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Failed to delete transaction');
-    }
-    return await res.json();
+    return handleResponse(res, 'Failed to delete transaction');
   },
 
   updateTransaction: async (id, updatedData) => {
@@ -106,11 +94,7 @@ export const mockBackend = {
       headers: getHeaders(),
       body: JSON.stringify(updatedData)
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Failed to update transaction');
-    }
-    return await res.json();
+    return handleResponse(res, 'Failed to update transaction');
   },
 
   // Collaborative Sharing Methods
@@ -120,11 +104,7 @@ export const mockBackend = {
       headers: getHeaders(),
       body: JSON.stringify({ targetUser })
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Failed to share workspace');
-    }
-    return await res.json();
+    return handleResponse(res, 'Failed to share workspace');
   },
 
   unshareWorkspace: async (targetId) => {
@@ -133,32 +113,20 @@ export const mockBackend = {
       headers: getHeaders(),
       body: JSON.stringify({ targetId })
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Failed to revoke workspace access');
-    }
-    return await res.json();
+    return handleResponse(res, 'Failed to revoke workspace access');
   },
 
   getSharingList: async () => {
     const res = await fetch(`${API_URL}/api/users/sharing`, {
       headers: getHeaders()
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Failed to fetch sharing list');
-    }
-    return await res.json();
+    return handleResponse(res, 'Failed to fetch sharing list');
   },
 
   getSharedWorkspaces: async () => {
     const res = await fetch(`${API_URL}/api/users/shared-with-me`, {
       headers: getHeaders()
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Failed to fetch shared workspaces');
-    }
-    return await res.json();
+    return handleResponse(res, 'Failed to fetch shared workspaces');
   }
 };
