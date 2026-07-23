@@ -79,7 +79,7 @@ let isBackendOffline = false;
 let lastCheckTime = 0;
 const OFFLINE_COOLDOWN = 10000; // 10 seconds (in milliseconds)
 
-const fetchWithTimeout = async (url, options = {}, timeout = 3000) => {
+const fetchWithTimeout = async (url, options = {}, timeout = 8000) => {
   const now = Date.now();
   if (isBackendOffline && (now - lastCheckTime < OFFLINE_COOLDOWN)) {
     throw new Error('Backend server is offline (cached connection failure)');
@@ -383,5 +383,15 @@ export const mockBackend = {
       console.warn('Failed to fetch shared workspaces:', error.message);
     }
     return [];
+  },
+
+  wakeUpBackend: async () => {
+    try {
+      // Background request with a 50s timeout to wake up the sleeping Render backend
+      await fetchWithTimeout(`${API_URL}/api/users`, { headers: getHeaders() }, 50000);
+      console.log('Backend server woke up successfully.');
+    } catch (error) {
+      console.warn('Background wake-up failed:', error.message);
+    }
   }
 };

@@ -16,6 +16,9 @@ export const AuthProvider = ({ children }) => {
       setUser(JSON.parse(savedUser));
     }
     setLoading(false);
+
+    // Background ping to wake up the server if it's sleeping (e.g. Render free tier)
+    mockBackend.wakeUpBackend().catch(() => {});
   }, []);
 
   const login = async (username, password) => {
