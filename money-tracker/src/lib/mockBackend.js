@@ -365,7 +365,9 @@ export const mockBackend = {
       if (res.ok) {
         return await res.json();
       }
-    } catch (e) {}
+    } catch (error) {
+      console.warn('Failed to fetch sharing list:', error.message);
+    }
     return [];
   },
 
@@ -377,7 +379,9 @@ export const mockBackend = {
       if (res.ok) {
         return await res.json();
       }
-    } catch (e) {}
+    } catch (error) {
+      console.warn('Failed to fetch shared workspaces:', error.message);
+    }
     return [];
   }
 };

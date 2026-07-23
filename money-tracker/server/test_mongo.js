@@ -6,6 +6,11 @@ import { fileURLToPath } from 'url';
 import dns from 'dns';
 
 dns.setDefaultResultOrder('ipv4first');
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+} catch (e) {
+  console.warn('Failed to set DNS servers programmatically:', e.message);
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
